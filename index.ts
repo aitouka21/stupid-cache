@@ -27,10 +27,7 @@ export function stupidCache<T extends object>(
     get(target, p) {
       const fv = target[<keyof T>p];
       if (typeof fv !== "function") return fv;
-
-      if (cacheOn && !(<(typeof p)[]>cacheOn).includes(p)) {
-        return fv;
-      }
+      if (cacheOn && !(<(typeof p)[]>cacheOn).includes(p)) return fv;
 
       return (...args: any[]) => {
         const key = hash([p, ...args]);
