@@ -1,37 +1,53 @@
 import hash from "object-hash";
 import { LRUCache } from "lru-cache";
-import util from "util";
 
-export type Opts = {
+export type Opts<T> = {
   ttl: number;
   max: number;
+  /**
+   * Cache all method if this field is not provided
+   */
+  cacheOn?: [keyof T];
   logger?: {
     trace: (message: string) => void;
   };
 };
 
+function isPromise(p: unknown) {
+  return p && Object.prototype.toString.call(p) === "[object Promise]";
+}
+
 export function stupidCache<T extends object>(
   target: T,
-  { ttl, max, logger }: Opts,
+  { ttl, max, logger, cacheOn }: Opts<T>,
 ) {
+  const cache = new LRUCache<string, [boolean, any]>({ ttl, max });
+
   return new Proxy(target, {
-    cache: new LRUCache({ ttl, max }),
-    get(target: T, p: keyof T) {
-      const fv = target[p];
+    get(target, p) {
+      const fv = target[<keyof T>p];
       if (typeof fv !== "function") return fv;
+
+      if (cacheOn && !(<(typeof p)[]>cacheOn).includes(p)) {
+        return fv;
+      }
 
       return (...args: any[]) => {
         const key = hash([p, ...args]);
         logger?.trace(`method = ${String(p)}, args = ${args}, key = ${key}`);
-        let v: any;
-        if ((v = this.cache.get(key))) {
-          logger?.trace(`Cache hit: key = ${key}, isPromise = ${v[0]}`);
-          return v[0] ? Promise.resolve(v[1]) : v[1];
+
+        const fromCache = cache.get(key);
+        if (fromCache) {
+          logger?.trace(`Cache hit: key = ${key}, isPromise = ${fromCache[0]}`);
+          return fromCache[0] ? Promise.resolve(fromCache[1]) : fromCache[1];
         }
-        return ((v = fv.apply(this, args)), util.types.isPromise(v))
-          ? v.then((v) => (this.cache.set(key, [true, v]), v))
-          : (this.cache.set(key, [false, v]), v);
+
+        const fromTarget = fv.apply(this, args);
+
+        return isPromise(fromTarget)
+          ? fromTarget.then((v: any) => (cache.set(key, [true, v]), v))
+          : (cache.set(key, [false, fromTarget]), fromTarget);
       };
     },
-  } as ProxyHandler<T> & { cache: LRUCache<string, any, unknown> });
+  });
 }
