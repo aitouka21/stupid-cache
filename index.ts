@@ -39,7 +39,7 @@ export function stupidCache<T extends object>(
           return fromCache[0] ? Promise.resolve(fromCache[1]) : fromCache[1];
         }
 
-        const fromTarget = fv.apply(this, args);
+        const fromTarget = fv.apply(target, args);
 
         return isPromise(fromTarget)
           ? fromTarget.then((v: any) => (cache.set(key, [true, v]), v))
