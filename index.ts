@@ -7,7 +7,7 @@ export type Opts<T> = {
   /**
    * Cache all method if this field is not provided
    */
-  cacheOn?: [keyof T];
+  cacheOn?: (keyof T)[];
   logger?: {
     trace: (message: string) => void;
   };
